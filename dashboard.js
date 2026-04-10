@@ -1,3 +1,4 @@
+
 // --- GLOBAL NAVIGATION ---
 window.switchTab = function(viewId, element) {
     document.querySelectorAll('.view-section').forEach(v => v.classList.remove('active'));
@@ -22,6 +23,7 @@ async function init() {
         return;
     }
 
+    // 1. Fetch Profile for general stats
     const { data: profile, error } = await supabaseClient
         .from('profiles')
         .select('*')
@@ -30,23 +32,23 @@ async function init() {
 
     if (error || !profile) return;
 
-    // Fetch Assessments with Score and Difficulty Weight
+    // 2. Fetch Assessments for the REAL Overall Score
     const { data: assessments } = await supabaseClient
         .from('assessments')
-        .select('score, difficulty_weight')
+        .select('score')
         .eq('user_id', user.id);
 
-    // Update User Header
+    // 3. Update User Header
     const name = profile.full_name || "Student";
     document.getElementById('realNameDisplay').innerText = name;
     document.getElementById('greeting').innerText = `Good morning, ${name.split(' ')[0]} 👋`;
     document.getElementById('userInitials').innerText = name.split(' ').map(n => n[0]).join('').toUpperCase();
     
-    // Update Stats with Weighted Logic
+    // 4. Update Stats with REAL Logic
+    let average = 0;
     if (assessments && assessments.length > 0) {
-        const totalWeightedScore = assessments.reduce((acc, curr) => acc + (curr.score * (curr.difficulty_weight || 1)), 0);
-        const weightedAverage = totalWeightedScore / assessments.length;
-        document.getElementById('overallScore').innerText = `${Math.round(weightedAverage)}%`;
+        average = assessments.reduce((acc, curr) => acc + curr.score, 0) / assessments.length;
+        document.getElementById('overallScore').innerText = `${Math.round(average)}%`;
     } else {
         document.getElementById('overallScore').innerText = `0%`; 
     }
@@ -59,8 +61,20 @@ async function init() {
     document.getElementById('creditVal').innerText = creditPoints;
     document.getElementById('llVal').innerText = calculatedLL;
 
+    // 5. Render Subject Progress Bars
     renderProgress(profile);
-    setupChatListeners();
+
+    // 6. Adaptive EduSense Insights
+    const adaptiveMessage = document.getElementById('adaptive-hint');
+    if (adaptiveMessage) {
+        if (average < 50 && assessments.length > 0) {
+            adaptiveMessage.innerText = "⚠️ EduSense Notice: Your score is a bit low. Try the 'Python' modules again!";
+        } else if (creditPoints > 100) {
+            adaptiveMessage.innerText = "🌟 EduSense Insight: Great progress! You're on track to reach Learning Level 2.";
+        } else {
+            adaptiveMessage.innerText = "🚀 Welcome to EduSense! Complete a quiz to start your adaptive journey.";
+        }
+    }
 }
 
 function renderProgress(profile) {
@@ -83,7 +97,6 @@ function renderProgress(profile) {
         </div>`).join('');
 }
 
-// --- QUIZ LOGIC ---
 const quizData = [
     { q: "1. Which of these is a Python List?", options: ["[1, 2]", "{1, 2}", "(1, 2)", "<1, 2>"], a: "[1, 2]" },
     { q: "2. Which keyword is used to create a function?", options: ["func", "define", "def", "function"], a: "def" },
@@ -146,20 +159,20 @@ window.startQuiz = function() {
 async function submitFinalScore(score) {
     const { data: { user } } = await supabaseClient.auth.getUser();
     
-    // Applying Difficulty Weight (e.g., Python Basics = 1.2)
-    const weight = 1.2;
-
+    // 1. Save to Assessments for the Overall Score calculation
     await supabaseClient.from('assessments').insert([{ 
         user_id: user.id, 
         score: score, 
-        subject: 'Python',
-        difficulty_weight: weight
+        subject: 'Python' 
     }]);
 
+    // 2. Update the specific profile column for the progress bar
+    // Use 'python_progress' to match your renderProgress mapping
     await supabaseClient.from('profiles')
         .update({ python_progress: score }) 
         .eq('id', user.id);
 
+    // 3. Update Credit Points
     await updateStudentMetrics(score / 2); 
 
     alert(`EduSense: Quiz Submitted! Your Python progress is now ${score}%.`);
@@ -171,55 +184,6 @@ async function updateStudentMetrics(pointsToAdd) {
     const { data: profile } = await supabaseClient.from('profiles').select('credit_points').eq('id', user.id).single();
     const newPoints = (profile.credit_points || 0) + pointsToAdd;
     await supabaseClient.from('profiles').update({ credit_points: newPoints }).eq('id', user.id);
-}
-
-// --- AI TUTOR INTERACTIVE LOGIC ---
-window.sendChat = function() {
-    const input = document.getElementById('chatInput');
-    const chatBox = document.getElementById('ai-chat-box');
-    const userMessage = input.value.trim();
-
-    if (!userMessage) return;
-
-    // Display User Message
-    chatBox.innerHTML += `
-        <div style="margin-bottom: 10px; text-align: right;">
-            <span style="background: var(--primary); color: white; padding: 8px 12px; border-radius: 12px; display: inline-block; max-width: 80%; font-size: 13px;">
-                ${userMessage}
-            </span>
-        </div>
-    `;
-
-    input.value = '';
-    chatBox.scrollTop = chatBox.scrollHeight;
-
-    // Simulated Bot Response
-    setTimeout(() => {
-        const botResponse = getAIResponse(userMessage);
-        chatBox.innerHTML += `
-            <div style="margin-bottom: 10px; text-align: left;">
-                <span style="background: #F1F5F9; color: var(--text); padding: 8px 12px; border-radius: 12px; display: inline-block; max-width: 80%; font-size: 13px; border: 1px solid var(--border);">
-                    🤖 ${botResponse}
-                </span>
-            </div>
-        `;
-        chatBox.scrollTop = chatBox.scrollHeight;
-    }, 600);
-};
-
-function getAIResponse(msg) {
-    const text = msg.toLowerCase();
-    if (text.includes("python")) return "Python is a great choice! Focus on Lists and Dictionaries first.";
-    if (text.includes("java")) return "Java is strict with types. Always remember your semicolons!";
-    if (text.includes("credit") || text.includes("points")) return "You can earn more credits by finishing the Python quiz in the Assessments tab.";
-    if (text.includes("score")) return "Your overall score is a weighted average of all your completed modules.";
-    return "I'm here to help! Ask me about your subjects or how to earn more credits.";
-}
-
-function setupChatListeners() {
-    document.getElementById('chatInput')?.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') sendChat();
-    });
 }
 
 window.updateWellbeing = async function(status) {
