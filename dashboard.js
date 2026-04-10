@@ -22,7 +22,7 @@ async function init() {
         return;
     }
 
-    // 1. Fetch Profile
+    // 1. Fetch Profile - ensure column names match your Supabase table
     const { data: profile, error } = await supabaseClient
         .from('profiles')
         .select('*')
@@ -31,48 +31,36 @@ async function init() {
 
     if (error || !profile) return;
 
-    // 2. Fetch Assessments with Difficulty Weight for Weighted Math
+    // 2. Fetch Assessments for the Weighted Score
+    // Filter by "Completed" status as per requirements
     const { data: assessments } = await supabaseClient
         .from('assessments')
         .select('score, difficulty_weight')
-        .eq('user_id', user.id);
+        .eq('user_id', user.id)
+        .eq('status', 'Completed');
 
-    // 3. Update User Header
-    const name = profile.full_name || "Student";
-    const displayName = document.getElementById('realNameDisplay');
-    if(displayName) displayName.innerText = name;
-    
-    const greeting = document.getElementById('greeting');
-    if(greeting) greeting.innerText = `Good morning, ${name.split(' ')[0]} 👋`;
-    
-    const initials = document.getElementById('userInitials');
-    if(initials) initials.innerText = name.split(' ').map(n => n[0]).join('').toUpperCase();
-    
-    // 4. Update Stats with Weighted Logic
+    // 3. Update Overall Score using the Weighted Formula
     if (assessments && assessments.length > 0) {
-        const totalWeightedScore = assessments.reduce((acc, curr) => {
-            // Default weight to 1 if not specified in DB
-            const weight = curr.difficulty_weight || 1.0;
-            return acc + (curr.score * weight);
+        const totalWeighted = assessments.reduce((acc, curr) => {
+            return acc + (curr.score * (curr.difficulty_weight || 1));
         }, 0);
-        
-        const weightedAverage = totalWeightedScore / assessments.length;
-        document.getElementById('overallScore').innerText = `${Math.round(weightedAverage)}%`;
-    } else {
-        document.getElementById('overallScore').innerText = `0%`; 
+        const weightedScore = totalWeighted / assessments.length;
+        document.getElementById('overallScore').innerText = `${Math.round(weightedScore)}%`;
     }
 
-    // 5. Calculate Credits and Learning Level
-    const creditPoints = profile.credit_points || 0;
-    const calculatedLL = Math.floor(creditPoints / 500) + 1;
+    // 4. Update Credits - match the column name in your Supabase screenshot
+    const credits = profile.credit_points || 0; 
+    document.getElementById('creditVal').innerText = credits;
     
-    document.getElementById('streakReal').innerText = `${profile.streak || 0} days`;
-    document.getElementById('wellbeingReal').innerText = profile.wellbeing || "--";
-    document.getElementById('creditVal').innerText = creditPoints;
-    document.getElementById('llVal').innerText = calculatedLL;
+    // Update Learning Level (LL) based on credits
+    const currentLL = Math.floor(credits / 500) + 1;
+    document.getElementById('llVal').innerText = currentLL;
 
+    // 5. Update other UI elements
+    document.getElementById('streakReal').innerText = `${profile.streak || 0} days`;
+    document.getElementById('wellbeingReal').innerText = profile.wellbeing_index || 0;
+    
     renderProgress(profile);
-    setupChatListeners();
 }
 
 function renderProgress(profile) {
