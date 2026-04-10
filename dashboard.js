@@ -65,7 +65,7 @@ async function init() {
     safeSet('llVal', Math.floor((safeProfile.credit_points || 0) / 500) + 1);
 
     renderProgress(safeProfile);
-}
+
     // 6. Adaptive EduSense Insights
     const adaptiveMessage = document.getElementById('adaptive-hint');
     if (adaptiveMessage) {
@@ -77,7 +77,7 @@ async function init() {
             adaptiveMessage.innerText = "🚀 Welcome to EduSense! Complete a quiz to start your adaptive journey.";
         }
     }
-
+}
 
 function renderProgress(profile) {
     const container = document.getElementById('progress-container');
