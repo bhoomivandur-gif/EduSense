@@ -31,7 +31,7 @@ async function init() {
         return;
     }
 
-    // 2. Weighted Score Logic from your Project Requirements
+    // 2. Weighted Score Logic
     const { data: assessments } = await supabaseClient
         .from('assessments')
         .select('score, difficulty_weight')
@@ -44,23 +44,35 @@ async function init() {
         document.getElementById('overallScore').innerText = `${Math.round(average)}%`;
     }
 
-    // 3. CREDIT POINTS FIX: Use the exact column name from your screenshot
+    // 3. Update Stats (EXACT IDs from your HTML)
     const currentCredits = profile.credit_points || 0; 
     const currentLL = profile.learning_level || 1;
 
-    // Ensure these IDs match your dashboard.html exactly
-    const creditElement = document.getElementById('creditVal');
-    const llElement = document.getElementById('llVal');
-
-    if (creditElement) creditElement.innerText = currentCredits;
-    if (llElement) llElement.innerText = currentLL;
-
-    // 4. Updating Header
-    const nameDisplay = document.getElementById('realNameDisplay');
-    if (nameDisplay) nameDisplay.innerText = profile.full_name || "Harshiv";
+    // Update numbers
+    if (document.getElementById('creditVal')) document.getElementById('creditVal').innerText = currentCredits;
+    if (document.getElementById('llVal')) document.getElementById('llVal').innerText = currentLL;
+    
+    // 4. Update Header & Other UI (Fixed Syntax: Now inside init)
+    if (document.getElementById('realNameDisplay')) {
+        document.getElementById('realNameDisplay').innerText = profile.full_name || "Harshiv";
+    }
+    
+    if (document.getElementById('streakReal')) {
+        document.getElementById('streakReal').innerText = `${profile.streak || 0} days`;
+    }
+    
+    if (document.getElementById('wellbeingReal')) {
+        document.getElementById('wellbeingReal').innerText = profile.wellbeing_index || 0;
+    }
+    
+    renderProgress(profile);
+    setupChatListeners();
 }
-
-
+    // 5. Update other UI elements
+    document.getElementById('streakReal').innerText = `${profile.streak || 0} days`;
+    document.getElementById('wellbeingReal').innerText = profile.wellbeing_index || 0;
+    
+    renderProgress(profile);
 
 function renderProgress(profile) {
     const container = document.getElementById('progress-container');
