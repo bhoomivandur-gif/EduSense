@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EduSense| Dashboard</title>
+    <title>EduSense | Dashboard</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
@@ -23,8 +23,8 @@
 
         .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 32px; }
         .stat-card { background: white; padding: 24px; border-radius: 16px; border: 1px solid var(--border); position: relative; }
-        .stat-card label { font-size: 11px; font-weight: 700; color: var(--text-light); text-transform: uppercase; }
-        .stat-card h2 { margin: 12px 0 4px; font-size: 28px; font-weight: 700; }
+        .stat-card label { font-size: 11px; font-weight: 700; color: var(--text-light); text-transform: uppercase; display: block; margin-bottom: 8px; }
+        .stat-card h2 { margin: 0; font-size: 28px; font-weight: 700; }
 
         .dashboard-grid { display: grid; grid-template-columns: 2fr 1.2fr; gap: 24px; }
         .panel { background: white; padding: 24px; border-radius: 16px; border: 1px solid var(--border); margin-bottom: 24px; }
@@ -42,8 +42,6 @@
         .btn-primary { background: var(--primary); color: white; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 600; cursor: pointer; }
         .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); align-items: center; justify-content: center; }
         .modal-content { background: white; padding: 30px; border-radius: 20px; width: 400px; }
-
-        
     </style>
 </head>
 <body>
@@ -78,26 +76,30 @@
             </header>
 
             <div class="stats-row">
-    <div class="stat-card"><label>Overall Score</label><h2 id="overallScore">--%</h2></div>
-    <div class="stat-card"><label>Study Streak</label><h2 id="streakReal">0 days</h2></div>
-    <div class="stat-card"><label>Wellbeing</label><h2 id="wellbeingReal">--</h2></div>
-    <div class="stat-card">
-        <label>Learning Level</label>
-        <h2>LL <span id="llVal">1</span></h2>
-    </div>
-    
-</div>
-<div class="stats-row">
-    <div class="stat-card">
-        <label>LEARNING LEVEL</label>
-        <div class="stat-val">LL <span id="llVal">1</span></div>
-    </div>
-    
-    <div class="stat-card">
-        <label>CREDIT POINTS</label>
-        <div class="stat-val" id="creditVal">0</div>
-    </div>
-</div>            </div>
+                <div class="stat-card">
+                    <label>Overall Score</label>
+                    <h2 id="overallScore">--%</h2>
+                </div>
+                <div class="stat-card">
+                    <label>Study Streak</label>
+                    <h2 id="streakReal">0 days</h2>
+                </div>
+                <div class="stat-card">
+                    <label>Wellbeing</label>
+                    <h2 id="wellbeingReal">--</h2>
+                </div>
+                <div class="stat-card">
+                    <label>Credit Points</label>
+                    <h2 id="creditVal">0</h2>
+                </div>
+            </div>
+
+            <div class="stats-row" style="grid-template-columns: 1fr; width: 25%;">
+                <div class="stat-card" style="background: #F1F6FE; border-color: var(--primary);">
+                    <label style="color: var(--primary);">Current Learning Level</label>
+                    <h2 style="color: var(--primary);">LL <span id="llVal">1</span></h2>
+                </div>
+            </div>
 
             <div class="dashboard-grid">
                 <div class="panel">
@@ -121,8 +123,7 @@
                 <h1>My Learning Modules</h1>
                 <p style="color:var(--text-light)">Pick up where you left off.</p>
             </header>
-            <div id="subject-list-container" style="display: grid; gap: 16px;">
-                </div>
+            <div id="subject-list-container" style="display: grid; gap: 16px;"></div>
         </section>
 
         <section id="progress" class="view-section"><h1>My Progress</h1></section>
@@ -133,7 +134,6 @@
                 <h1>Knowledge Checks</h1>
                 <p style="color:var(--text-light)">Validate your skills to earn more credits.</p>
             </header>
-
             <div class="panel" style="display:flex; align-items:center; gap:20px; border-left: 4px solid #10B981;">
                 <div style="background:#ecfdf5; padding:15px; border-radius:12px; font-size:24px;">🐍</div>
                 <div style="flex-grow:1">
@@ -141,15 +141,6 @@
                     <p style="margin:4px 0; font-size:13px; color:var(--text-light)">10 Questions • 15 Minutes • 50 Credits</p>
                 </div>
                  <button class="btn-primary" onclick="startQuiz()">Start Quiz</button>
-            </div>
-
-            <div class="panel" style="display:flex; align-items:center; gap:20px; border-left: 4px solid #f89820; margin-top:16px;">
-                <div style="background:#fff7ed; padding:15px; border-radius:12px; font-size:24px;">☕</div>
-                <div style="flex-grow:1">
-                    <h4 style="margin:0">Java Classes & Objects</h4>
-                    <p style="margin:4px 0; font-size:13px; color:var(--text-light)">12 Questions • 20 Minutes • 80 Credits</p>
-                </div>
-                <button class="btn-primary" style="background:#cbd5e1; cursor:not-allowed;" disabled>Locked</button>
             </div>
         </section>
     </main>
