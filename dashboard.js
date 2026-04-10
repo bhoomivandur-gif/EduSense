@@ -161,32 +161,30 @@ window.startQuiz = function() {
 async function submitFinalScore(score) {
     const { data: { user } } = await supabaseClient.auth.getUser();
     
-    // 1. Save the assessment
+    // 1. Save the attempt to the database
     await supabaseClient.from('assessments').insert([{ 
         user_id: user.id, 
         score: score, 
         subject: 'Python' 
     }]);
 
-    // 2. Update Python progress
+    // 2. Update the progress bar (e.g., 50%)
     await supabaseClient.from('profiles')
         .update({ python_progress: score }) 
         .eq('id', user.id);
 
-    // 3. Update Credit Points (Give 50 credits as promised)
-    // If the student gets a passing score (e.g., > 0), give them 50 points
-    if (score > 0) {
-        await updateStudentMetrics(50); 
+    // 3. Proportional Credit Logic: 10 score = 1 credit
+    // If score is 50, pointsToAdd will be 5
+    const pointsToAdd = score / 10;
+    
+    if (pointsToAdd > 0) {
+        await updateStudentMetrics(pointsToAdd);
+        alert(`EduSense: You scored ${score}. You earned ${pointsToAdd} credits!`);
+    } else {
+        alert(`EduSense: You scored ${score}. No credits earned this time.`);
     }
 
-    alert(`EduSense: Quiz Submitted! You earned 50 credits.`);
     location.reload(); 
-}
-async function updateStudentMetrics(pointsToAdd) {
-    const { data: { user } } = await supabaseClient.auth.getUser();
-    const { data: profile } = await supabaseClient.from('profiles').select('credit_points').eq('id', user.id).single();
-    const newPoints = (profile.credit_points || 0) + pointsToAdd;
-    await supabaseClient.from('profiles').update({ credit_points: newPoints }).eq('id', user.id);
 }
 
 window.updateWellbeing = async function(status) {
