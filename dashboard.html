@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <script src="config.js"></script>
+    <script src="dashboard.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EduSense| Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        :root { --primary: #4A90E2; --bg: #F8FAFC; --white: #FFFFFF; --text: #1F2937; --text-light: #6B7280; --border: #E5E7EB; }
+        body { margin: 0; font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); display: flex; height: 100vh; overflow: hidden; }
+        
+        .sidebar { width: 260px; background: var(--white); border-right: 1px solid var(--border); padding: 24px; display: flex; flex-direction: column; }
+        .logo { font-size: 22px; font-weight: 700; color: var(--primary); margin-bottom: 40px; }
+        .nav-label { font-size: 11px; font-weight: 700; color: var(--text-light); text-transform: uppercase; letter-spacing: 1px; margin: 20px 0 10px; }
+        .nav-item { display: flex; align-items: center; padding: 12px 16px; border-radius: 10px; color: var(--text); text-decoration: none; font-weight: 500; margin-bottom: 4px; cursor: pointer; transition: 0.2s; }
+        .nav-item.active { background-color: #F1F6FE; color: var(--primary); font-weight: 600; }
+        .nav-icon { margin-right: 12px; }
+
+        .main-content { flex-grow: 1; padding: 40px; overflow-y: auto; }
+        .view-section { display: none; }
+        .view-section.active { display: block; }
+
+        .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 32px; }
+        .stat-card { background: white; padding: 24px; border-radius: 16px; border: 1px solid var(--border); position: relative; }
+        .stat-card label { font-size: 11px; font-weight: 700; color: var(--text-light); text-transform: uppercase; }
+        .stat-card h2 { margin: 12px 0 4px; font-size: 28px; font-weight: 700; }
+
+        .dashboard-grid { display: grid; grid-template-columns: 2fr 1.2fr; gap: 24px; }
+        .panel { background: white; padding: 24px; border-radius: 16px; border: 1px solid var(--border); margin-bottom: 24px; }
+        
+        .progress-bar { height: 8px; background: #F1F5F9; border-radius: 4px; margin: 8px 0; overflow: hidden; }
+        .fill { height: 100%; border-radius: 4px; transition: width 0.8s ease; }
+
+        .mood-row { display: flex; gap: 10px; margin-top: 20px; }
+        .mood-btn { flex: 1; padding: 15px 5px; border: 1px solid var(--border); background: #f9fafb; border-radius: 12px; cursor: pointer; text-align: center; }
+        .mood-btn small { display: block; margin-top: 5px; font-size: 10px; color: var(--text-light); }
+
+        .user-profile { margin-top: auto; padding-top: 20px; border-top: 1px solid var(--border); display: flex; align-items: center; gap: 12px; }
+        .avatar { width: 40px; height: 40px; border-radius: 50%; background: #E0E7FF; color: var(--primary); display: flex; align-items: center; justify-content: center; font-weight: 700; }
+
+        .btn-primary { background: var(--primary); color: white; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 600; cursor: pointer; }
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); align-items: center; justify-content: center; }
+        .modal-content { background: white; padding: 30px; border-radius: 20px; width: 400px; }
+
+        
+    </style>
+</head>
+<body>
+    <nav class="sidebar">
+        <div class="logo">EduSense</div>
+        <div class="nav-label">Overview</div>
+        <div class="nav-item active" onclick="switchTab('dashboard', this)"><span class="nav-icon">📊</span> Dashboard</div>
+        <div class="nav-item" onclick="switchTab('progress', this)"><span class="nav-icon">📈</span> My Progress</div>
+        <div class="nav-item" onclick="switchTab('achievements', this)"><span class="nav-icon">🏆</span> Achievements</div>
+        <div class="nav-label">Learning</div>
+        <div class="nav-item" onclick="switchTab('subjects', this)"><span class="nav-icon">📚</span> Subjects</div>
+        <div class="nav-item" onclick="switchTab('assessments', this)"><span class="nav-icon">📝</span> Assessments</div>
+        <div class="nav-item" onclick="openTutor()"><span class="nav-icon">🤖</span> AI Tutor</div>
+        
+        <div class="user-profile">
+            <div class="avatar" id="userInitials">--</div>
+            <div style="flex-grow: 1;">
+                <div id="realNameDisplay" style="font-weight: 600; font-size: 14px;">Loading...</div>
+                <div onclick="handleLogout()" style="color: #EF4444; font-size: 12px; cursor: pointer; font-weight: 500;">Logout</div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="main-content">
+        <section id="dashboard" class="view-section active">
+            <header style="display:flex; justify-content:space-between; align-items:center; margin-bottom:32px;">
+                <div>
+                    <h1 id="greeting" style="font-size: 32px; margin: 0;">Good morning!</h1>
+                    <p style="color:var(--text-light); margin-top:4px;">Welcome back to your IT learning journey.</p>
+                </div>
+                <button class="btn-primary" onclick="openTutor()">Ask AI Tutor ↗</button>
+            </header>
+
+            <div class="stats-row">
+    <div class="stat-card"><label>Overall Score</label><h2 id="overallScore">--%</h2></div>
+    <div class="stat-card"><label>Study Streak</label><h2 id="streakReal">0 days</h2></div>
+    <div class="stat-card"><label>Wellbeing</label><h2 id="wellbeingReal">--</h2></div>
+    <div class="stat-card">
+        <label>Learning Level</label>
+        <h2>LL <span id="llVal">1</span></h2>
+    </div>
+    
+</div>
+<div class="stats-row">
+    <div class="stat-card">
+        <label>LEARNING LEVEL</label>
+        <div class="stat-val">LL <span id="llVal">1</span></div>
+    </div>
+    
+    <div class="stat-card">
+        <label>CREDIT POINTS</label>
+        <div class="stat-val" id="creditVal">0</div>
+    </div>
+</div>            </div>
+
+            <div class="dashboard-grid">
+                <div class="panel">
+                    <h3>Subject Progress (IT)</h3>
+                    <div id="progress-container">Loading subjects...</div>
+                </div>
+                <div class="panel">
+                    <h3>Wellbeing Check-in</h3>
+                    <div class="mood-row">
+                        <button class="mood-btn" onclick="updateWellbeing('Low')">😟<small>Low</small></button>
+                        <button class="mood-btn" onclick="updateWellbeing('Okay')">😐<small>Okay</small></button>
+                        <button class="mood-btn" onclick="updateWellbeing('Good')">😊<small>Good</small></button>
+                        <button class="mood-btn" onclick="updateWellbeing('Great')">🤩<small>Great</small></button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="subjects" class="view-section">
+            <header style="margin-bottom: 30px;">
+                <h1>My Learning Modules</h1>
+                <p style="color:var(--text-light)">Pick up where you left off.</p>
+            </header>
+            <div id="subject-list-container" style="display: grid; gap: 16px;">
+                </div>
+        </section>
+
+        <section id="progress" class="view-section"><h1>My Progress</h1></section>
+        <section id="achievements" class="view-section"><h1>Achievements</h1></section>
+
+        <section id="assessments" class="view-section">
+            <header style="margin-bottom: 30px;">
+                <h1>Knowledge Checks</h1>
+                <p style="color:var(--text-light)">Validate your skills to earn more credits.</p>
+            </header>
+
+            <div class="panel" style="display:flex; align-items:center; gap:20px; border-left: 4px solid #10B981;">
+                <div style="background:#ecfdf5; padding:15px; border-radius:12px; font-size:24px;">🐍</div>
+                <div style="flex-grow:1">
+                    <h4 style="margin:0">Python Basics: Lists & Tuples</h4>
+                    <p style="margin:4px 0; font-size:13px; color:var(--text-light)">10 Questions • 15 Minutes • 50 Credits</p>
+                </div>
+                 <button class="btn-primary" onclick="startQuiz()">Start Quiz</button>
+            </div>
+
+            <div class="panel" style="display:flex; align-items:center; gap:20px; border-left: 4px solid #f89820; margin-top:16px;">
+                <div style="background:#fff7ed; padding:15px; border-radius:12px; font-size:24px;">☕</div>
+                <div style="flex-grow:1">
+                    <h4 style="margin:0">Java Classes & Objects</h4>
+                    <p style="margin:4px 0; font-size:13px; color:var(--text-light)">12 Questions • 20 Minutes • 80 Credits</p>
+                </div>
+                <button class="btn-primary" style="background:#cbd5e1; cursor:not-allowed;" disabled>Locked</button>
+            </div>
+        </section>
+    </main>
+
+    <div id="tutorModal" class="modal">
+        <div class="modal-content">
+            <h3>🤖 AI Tutor</h3>
+            <div id="ai-chat-box" style="height:200px; overflow-y:auto; border:1px solid #eee; padding:10px; margin-bottom:10px;">Hi! Ask me anything about your IT modules.</div>
+            <input type="text" id="chatInput" placeholder="Type your question..." style="width:100%; padding:10px; box-sizing:border-box; border-radius:8px; border:1px solid #ddd;">
+            <div style="display:flex; gap:10px; margin-top:15px;">
+                <button class="btn-primary" style="flex:1" onclick="sendChat()">Send</button>
+                <button class="btn-primary" style="flex:1; background:#94a3b8;" onclick="closeTutor()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="dashboard.js"></script>
+</body>
+</html>
