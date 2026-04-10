@@ -58,7 +58,7 @@ async function init() {
         average = assessments.reduce((acc, curr) => acc + curr.score, 0) / assessments.length;
     }
     
-    safeSet('overallScore', `${Math.round(average)}%`);
+    safeSet('overallScore', `${Math.round(average)}`);
     safeSet('streakReal', `${safeProfile.streak || 0} days`);
     safeSet('wellbeingReal', safeProfile.wellbeing || 0);
     safeSet('creditVal', safeProfile.credit_points || 0);
@@ -161,26 +161,27 @@ window.startQuiz = function() {
 async function submitFinalScore(score) {
     const { data: { user } } = await supabaseClient.auth.getUser();
     
-    // 1. Save to Assessments for the Overall Score calculation
+    // 1. Save the assessment
     await supabaseClient.from('assessments').insert([{ 
         user_id: user.id, 
         score: score, 
         subject: 'Python' 
     }]);
 
-    // 2. Update the specific profile column for the progress bar
-    // Use 'python_progress' to match your renderProgress mapping
+    // 2. Update Python progress
     await supabaseClient.from('profiles')
         .update({ python_progress: score }) 
         .eq('id', user.id);
 
-    // 3. Update Credit Points
-    await updateStudentMetrics(score / 2); 
+    // 3. Update Credit Points (Give 50 credits as promised)
+    // If the student gets a passing score (e.g., > 0), give them 50 points
+    if (score > 0) {
+        await updateStudentMetrics(50); 
+    }
 
-    alert(`EduSense: Quiz Submitted! Your Python progress is now ${score}%.`);
+    alert(`EduSense: Quiz Submitted! You earned 50 credits.`);
     location.reload(); 
 }
-
 async function updateStudentMetrics(pointsToAdd) {
     const { data: { user } } = await supabaseClient.auth.getUser();
     const { data: profile } = await supabaseClient.from('profiles').select('credit_points').eq('id', user.id).single();
