@@ -133,13 +133,11 @@ window.startQuiz = function() {
     main.innerHTML = quizHtml;
 
     document.getElementById('quizForm').onsubmit = async (e) => {
-        e.preventDefault();
-        const formData = new FormData(e.target);
-        let correctCount = 0;
-        quizData.forEach((item, index) => {
-            if (formData.get(`q${index}`) === item.a) correctCount++;
-        });
-        const finalScore = (correctCount / quizData.length) * 100;
+    e.preventDefault();
+    console.log("Submit button was actually clicked!"); // Add this line
+    alert("Checking answers..."); // Add this line
+    
+    const formData = new FormData(e.target);
         await submitFinalScore(finalScore);
     };
 };
