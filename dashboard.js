@@ -21,6 +21,32 @@ async function init() {
     const { data: { user } } = await supabaseClient.auth.getUser();
     if (!user) return;
 
+    // Fetch profile with a fallback to prevent crashing
+    const { data: profile, error } = await supabaseClient
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .maybeSingle(); // maybeSingle() prevents the error if the row is missing
+
+    if (error) console.error("Database error:", error);
+
+    // If profile is missing, don't crash, just use default values
+    const safeProfile = profile || { full_name: "User", credit_points: 0, learning_level: 1 };
+
+    // Update UI safely
+    if (document.getElementById('realNameDisplay')) {
+        document.getElementById('realNameDisplay').innerText = safeProfile.full_name;
+    }
+    
+    // This allows navigation to start working even if data is missing
+    console.log("App initialized successfully");
+    
+    if (profile) {
+        renderProgress(profile);
+    }
+    setupChatListeners();
+}
+
     // 1. Fetching data from the 'profiles' table
     const { data: profile, error } = await supabaseClient
         .from('profiles')
@@ -68,7 +94,7 @@ async function init() {
     
     renderProgress(profile);
     setupChatListeners();
-}
+
 
 function renderProgress(profile) {
     const container = document.getElementById('progress-container');
