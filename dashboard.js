@@ -22,56 +22,50 @@ async function init() {
         return;
     }
 
-    // 1. Fetch Profile for general stats
-   // Change .single() to .maybeSingle() to prevent the crash
-const { data: profile, error } = await supabaseClient
-    .from('profiles')
-    .select('*')
-    .eq('id', user.id)
-    .maybeSingle(); 
+    const { data: profile, error } = await supabaseClient
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .maybeSingle(); 
 
-if (error) {
-    console.error("Profile error:", error);
-    return;
-}
+    if (error) {
+        console.error("Profile error:", error);
+        return;
+    }
 
-// If profile is null, the script won't crash now
-if (!profile) {
-    document.getElementById('realNameDisplay').innerText = "Guest User";
-    return; 
-}
-    // 2. Fetch Assessments for the REAL Overall Score
+    // Safety: If profile doesn't exist yet, we still want navigation to work
+    const safeProfile = profile || { full_name: "Student", credit_points: 0 };
+    const name = safeProfile.full_name || "Student";
+
+    // Helper to safely update text without crashing
+    const safeSet = (id, val) => {
+        const el = document.getElementById(id);
+        if (el) el.innerText = val;
+    };
+
+    safeSet('realNameDisplay', name);
+    safeSet('greeting', `Good morning, ${name.split(' ')[0]} 👋`);
+    safeSet('userInitials', name.split(' ').map(n => n[0]).join('').toUpperCase());
+    
+    // Fetch assessments for average
     const { data: assessments } = await supabaseClient
         .from('assessments')
         .select('score')
         .eq('user_id', user.id);
 
-    // 3. Update User Header
-    const name = profile.full_name || "Student";
-    document.getElementById('realNameDisplay').innerText = name;
-    document.getElementById('greeting').innerText = `Good morning, ${name.split(' ')[0]} 👋`;
-    document.getElementById('userInitials').innerText = name.split(' ').map(n => n[0]).join('').toUpperCase();
-    
-    // 4. Update Stats with REAL Logic
     let average = 0;
     if (assessments && assessments.length > 0) {
         average = assessments.reduce((acc, curr) => acc + curr.score, 0) / assessments.length;
-        document.getElementById('overallScore').innerText = `${Math.round(average)}%`;
-    } else {
-        document.getElementById('overallScore').innerText = `0%`; 
     }
-
-    const creditPoints = profile.credit_points || 0;
-    const calculatedLL = Math.floor(creditPoints / 500) + 1;
     
-    document.getElementById('streakReal').innerText = `${profile.streak || 0} days`;
-    document.getElementById('wellbeingReal').innerText = profile.wellbeing || 0;
-    document.getElementById('creditVal').innerText = creditPoints;
-    document.getElementById('llVal').innerText = calculatedLL;
+    safeSet('overallScore', `${Math.round(average)}%`);
+    safeSet('streakReal', `${safeProfile.streak || 0} days`);
+    safeSet('wellbeingReal', safeProfile.wellbeing || 0);
+    safeSet('creditVal', safeProfile.credit_points || 0);
+    safeSet('llVal', Math.floor((safeProfile.credit_points || 0) / 500) + 1);
 
-    // 5. Render Subject Progress Bars
-    renderProgress(profile);
-
+    renderProgress(safeProfile);
+}
     // 6. Adaptive EduSense Insights
     const adaptiveMessage = document.getElementById('adaptive-hint');
     if (adaptiveMessage) {
@@ -83,7 +77,7 @@ if (!profile) {
             adaptiveMessage.innerText = "🚀 Welcome to EduSense! Complete a quiz to start your adaptive journey.";
         }
     }
-}
+
 
 function renderProgress(profile) {
     const container = document.getElementById('progress-container');
