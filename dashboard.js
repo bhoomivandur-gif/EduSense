@@ -17,51 +17,50 @@ window.handleLogout = async function() {
 // --- DATA INITIALIZATION ---
 async function init() {
     const { data: { user } } = await supabaseClient.auth.getUser();
-    if (!user) {
-        window.location.href = 'index.html';
-        return;
-    }
+    if (!user) return;
 
-    // 1. Fetch Profile - ensure column names match your Supabase table
+    // 1. Fetching data from the 'profiles' table
     const { data: profile, error } = await supabaseClient
         .from('profiles')
         .select('*')
         .eq('id', user.id)
         .single();
 
-    if (error || !profile) return;
+    if (error || !profile) {
+        console.error("Profile load error:", error);
+        return;
+    }
 
-    // 2. Fetch Assessments for the Weighted Score
-    // Filter by "Completed" status as per requirements
+    // 2. Weighted Score Logic from your Project Requirements
     const { data: assessments } = await supabaseClient
         .from('assessments')
         .select('score, difficulty_weight')
         .eq('user_id', user.id)
         .eq('status', 'Completed');
 
-    // 3. Update Overall Score using the Weighted Formula
     if (assessments && assessments.length > 0) {
-        const totalWeighted = assessments.reduce((acc, curr) => {
-            return acc + (curr.score * (curr.difficulty_weight || 1));
-        }, 0);
-        const weightedScore = totalWeighted / assessments.length;
-        document.getElementById('overallScore').innerText = `${Math.round(weightedScore)}%`;
+        const totalWeighted = assessments.reduce((acc, curr) => acc + (curr.score * (curr.difficulty_weight || 1)), 0);
+        const average = totalWeighted / assessments.length;
+        document.getElementById('overallScore').innerText = `${Math.round(average)}%`;
     }
 
-    // 4. Update Credits - match the column name in your Supabase screenshot
-    const credits = profile.credit_points || 0; 
-    document.getElementById('creditVal').innerText = credits;
-    
-    // Update Learning Level (LL) based on credits
-    const currentLL = Math.floor(credits / 500) + 1;
-    document.getElementById('llVal').innerText = currentLL;
+    // 3. CREDIT POINTS FIX: Use the exact column name from your screenshot
+    const currentCredits = profile.credit_points || 0; 
+    const currentLL = profile.learning_level || 1;
 
-    // 5. Update other UI elements
-    document.getElementById('streakReal').innerText = `${profile.streak || 0} days`;
-    document.getElementById('wellbeingReal').innerText = profile.wellbeing_index || 0;
-    
-    renderProgress(profile);
+    // Ensure these IDs match your dashboard.html exactly
+    const creditElement = document.getElementById('creditVal');
+    const llElement = document.getElementById('llVal');
+
+    if (creditElement) creditElement.innerText = currentCredits;
+    if (llElement) llElement.innerText = currentLL;
+
+    // 4. Updating Header
+    const nameDisplay = document.getElementById('realNameDisplay');
+    if (nameDisplay) nameDisplay.innerText = profile.full_name || "Harshiv";
 }
+
+
 
 function renderProgress(profile) {
     const container = document.getElementById('progress-container');
