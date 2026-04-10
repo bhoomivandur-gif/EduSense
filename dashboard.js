@@ -1,9 +1,11 @@
 // --- GLOBAL NAVIGATION ---
 window.switchTab = function(viewId, element) {
     document.querySelectorAll('.view-section').forEach(v => v.classList.remove('active'));
-    document.getElementById(viewId).classList.add('active');
+    const target = document.getElementById(viewId);
+    if (target) target.classList.add('active');
+    
     document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
-    element.classList.add('active');
+    if (element) element.classList.add('active');
 };
 
 window.openTutor = () => document.getElementById('tutorModal').style.display = 'flex';
@@ -44,15 +46,14 @@ async function init() {
         document.getElementById('overallScore').innerText = `${Math.round(average)}%`;
     }
 
-    // 3. Update Stats (EXACT IDs from your HTML)
+    // 3. Update Stats
     const currentCredits = profile.credit_points || 0; 
     const currentLL = profile.learning_level || 1;
 
-    // Update numbers
     if (document.getElementById('creditVal')) document.getElementById('creditVal').innerText = currentCredits;
     if (document.getElementById('llVal')) document.getElementById('llVal').innerText = currentLL;
     
-    // 4. Update Header & Other UI (Fixed Syntax: Now inside init)
+    // 4. Update UI Elements
     if (document.getElementById('realNameDisplay')) {
         document.getElementById('realNameDisplay').innerText = profile.full_name || "Harshiv";
     }
@@ -68,11 +69,6 @@ async function init() {
     renderProgress(profile);
     setupChatListeners();
 }
-    // 5. Update other UI elements
-    document.getElementById('streakReal').innerText = `${profile.streak || 0} days`;
-    document.getElementById('wellbeingReal').innerText = profile.wellbeing_index || 0;
-    
-    renderProgress(profile);
 
 function renderProgress(profile) {
     const container = document.getElementById('progress-container');
@@ -150,32 +146,43 @@ window.startQuiz = function() {
 
 async function submitFinalScore(score) {
     const { data: { user } } = await supabaseClient.auth.getUser();
-    
-    // Applying Difficulty Weight for Python Basics
     const weight = 1.2;
 
+    // Insert assessment record
     await supabaseClient.from('assessments').insert([{ 
         user_id: user.id, 
         score: score, 
         subject: 'Python',
+        status: 'Completed',
         difficulty_weight: weight
     }]);
 
+    // Update progress
     await supabaseClient.from('profiles')
         .update({ python_progress: score }) 
         .eq('id', user.id);
 
-    await updateStudentMetrics(score / 2); 
+    // If score is 100%, add 50 points
+    if (score === 100) {
+        await updateStudentMetrics(50);
+    } else {
+        await updateStudentMetrics(score / 2);
+    }
 
-    alert(`EduSense: Quiz Submitted! Progress: ${score}%`);
+    alert(`EduSense: Quiz Submitted! Score: ${score}%`);
     location.reload(); 
 }
 
 async function updateStudentMetrics(pointsToAdd) {
     const { data: { user } } = await supabaseClient.auth.getUser();
     const { data: profile } = await supabaseClient.from('profiles').select('credit_points').eq('id', user.id).single();
-    const newPoints = (profile.credit_points || 0) + pointsToAdd;
-    await supabaseClient.from('profiles').update({ credit_points: newPoints }).eq('id', user.id);
+    
+    const currentPoints = profile.credit_points || 0;
+    const newPoints = currentPoints + pointsToAdd;
+    
+    await supabaseClient.from('profiles')
+        .update({ credit_points: newPoints })
+        .eq('id', user.id);
 }
 
 // --- AI TUTOR INTERACTIVE LOGIC ---
@@ -208,8 +215,9 @@ function setupChatListeners() {
 window.updateWellbeing = async function(status) {
     const { data: { user } } = await supabaseClient.auth.getUser();
     let score = status === 'Great' ? 95 : status === 'Good' ? 80 : status === 'Okay' ? 60 : 40;
-    await supabaseClient.from('profiles').update({ wellbeing: score }).eq('id', user.id);
+    await supabaseClient.from('profiles').update({ wellbeing_index: score }).eq('id', user.id);
     document.getElementById('wellbeingReal').innerText = score;
 };
 
+// Start
 init();
