@@ -1,4 +1,3 @@
-
 // --- GLOBAL NAVIGATION ---
 window.switchTab = function(viewId, element) {
     document.querySelectorAll('.view-section').forEach(v => v.classList.remove('active'));
