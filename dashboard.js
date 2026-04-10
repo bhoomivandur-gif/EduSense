@@ -1,17 +1,9 @@
 // --- GLOBAL NAVIGATION ---
 window.switchTab = function(viewId, element) {
-    // Hide all sections
     document.querySelectorAll('.view-section').forEach(v => v.classList.remove('active'));
-    
-    // Show selected section
-    const target = document.getElementById(viewId);
-    if (target) {
-        target.classList.add('active');
-    }
-
-    // Update Sidebar
+    document.getElementById(viewId).classList.add('active');
     document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
-    if (element) element.classList.add('active');
+    element.classList.add('active');
 };
 
 window.openTutor = () => document.getElementById('tutorModal').style.display = 'flex';
@@ -24,45 +16,63 @@ window.handleLogout = async function() {
 
 // --- DATA INITIALIZATION ---
 async function init() {
-    try {
-        const { data: { user } } = await supabaseClient.auth.getUser();
-        if (!user) return;
+    const { data: { user } } = await supabaseClient.auth.getUser();
+    if (!user) {
+        window.location.href = 'index.html';
+        return;
+    }
 
-        // Fetch profile - using maybeSingle() to prevent crash if row is missing
-        const { data: profile, error } = await supabaseClient
-            .from('profiles')
-            .select('*')
-            .eq('id', user.id)
-            .maybeSingle();
+    // 1. Fetch Profile for general stats
+    const { data: profile, error } = await supabaseClient
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
 
-        if (error) console.warn("Profile fetch error:", error);
+    if (error || !profile) return;
 
-        // Update UI Elements Safely
-        const setVal = (id, val) => { if(document.getElementById(id)) document.getElementById(id).innerText = val; };
-        
-        setVal('realNameDisplay', profile?.full_name || "Harshiv");
-        setVal('creditVal', profile?.credit_points || 0);
-        setVal('llVal', profile?.learning_level || 1);
-        setVal('streakReal', `${profile?.streak || 0} days`);
-        setVal('wellbeingReal', profile?.wellbeing_index || 0);
+    // 2. Fetch Assessments for the REAL Overall Score
+    const { data: assessments } = await supabaseClient
+        .from('assessments')
+        .select('score')
+        .eq('user_id', user.id);
 
-        // Render Progress Bars
-        renderProgress(profile || {});
-        
-        // Load Overall Score from assessments
-        const { data: assessments } = await supabaseClient
-            .from('assessments')
-            .select('score, difficulty_weight')
-            .eq('user_id', user.id);
+    // 3. Update User Header
+    const name = profile.full_name || "Student";
+    document.getElementById('realNameDisplay').innerText = name;
+    document.getElementById('greeting').innerText = `Good morning, ${name.split(' ')[0]} 👋`;
+    document.getElementById('userInitials').innerText = name.split(' ').map(n => n[0]).join('').toUpperCase();
+    
+    // 4. Update Stats with REAL Logic
+    let average = 0;
+    if (assessments && assessments.length > 0) {
+        average = assessments.reduce((acc, curr) => acc + curr.score, 0) / assessments.length;
+        document.getElementById('overallScore').innerText = `${Math.round(average)}%`;
+    } else {
+        document.getElementById('overallScore').innerText = `0%`; 
+    }
 
-        if (assessments?.length > 0) {
-            const total = assessments.reduce((acc, curr) => acc + (curr.score * (curr.difficulty_weight || 1)), 0);
-            setVal('overallScore', `${Math.round(total / assessments.length)}%`);
+    const creditPoints = profile.credit_points || 0;
+    const calculatedLL = Math.floor(creditPoints / 500) + 1;
+    
+    document.getElementById('streakReal').innerText = `${profile.streak || 0} days`;
+    document.getElementById('wellbeingReal').innerText = profile.wellbeing || 0;
+    document.getElementById('creditVal').innerText = creditPoints;
+    document.getElementById('llVal').innerText = calculatedLL;
+
+    // 5. Render Subject Progress Bars
+    renderProgress(profile);
+
+    // 6. Adaptive EduSense Insights
+    const adaptiveMessage = document.getElementById('adaptive-hint');
+    if (adaptiveMessage) {
+        if (average < 50 && assessments.length > 0) {
+            adaptiveMessage.innerText = "⚠️ EduSense Notice: Your score is a bit low. Try the 'Python' modules again!";
+        } else if (creditPoints > 100) {
+            adaptiveMessage.innerText = "🌟 EduSense Insight: Great progress! You're on track to reach Learning Level 2.";
+        } else {
+            adaptiveMessage.innerText = "🚀 Welcome to EduSense! Complete a quiz to start your adaptive journey.";
         }
-
-        setupChatListeners();
-    } catch (e) {
-        console.error("Critical Init Error:", e);
     }
 }
 
@@ -80,84 +90,109 @@ function renderProgress(profile) {
         <div style="margin-bottom:20px">
             <div style="display:flex; justify-content:space-between; font-size:14px; margin-bottom:6px;">
                 <span style="font-weight:600">${s.name}</span>
-                <span style="color:#666">${s.prog}%</span>
+                <span style="color:var(--text-light)">${s.prog}%</span>
             </div>
-            <div style="background:#eee; height:8px; border-radius:4px; overflow:hidden;">
-                <div style="width:${s.prog}%; background:${s.col}; height:100%;"></div>
-            </div>
+            <div class="progress-bar"><div class="fill" style="width:${s.prog}%; background:${s.col}"></div></div>
         </div>`).join('');
 }
 
-// --- QUIZ LOGIC ---
 const quizData = [
-    { q: "Which of these is a Python List?", options: ["[1, 2]", "{1, 2}", "(1, 2)", "<1, 2>"], a: "[1, 2]" },
-    { q: "Which keyword is used to create a function?", options: ["func", "define", "def", "function"], a: "def" },
-    { q: "How do you start a comment in Python?", options: ["//", "/*", "#", "--"], a: "#" },
-    { q: "What is the correct file extension for Python?", options: [".pyt", ".py", ".pt", ".python"], a: ".py" },
-    { q: "Which of these is used for a multi-line string?", options: ["'''", "###", "---", "&&&"], a: "'''" },
-    { q: "What is the output of 2 ** 3?", options: ["6", "8", "9", "5"], a: "8" },
-    { q: "Which operator is used for 'floor division'?", options: ["/", "%", "//", "**"], a: "//" },
-    { q: "How do you create a dictionary?", options: ["[]", "{}", "()", "<>"], a: "{}" },
-    { q: "Which method removes whitespace from start/end?", options: ["trim()", "strip()", "cut()", "clean()"], a: "strip()" },
-    { q: "What is the default return value of a function?", options: ["0", "False", "None", "Null"], a: "None" }
+    { q: "1. Which of these is a Python List?", options: ["[1, 2]", "{1, 2}", "(1, 2)", "<1, 2>"], a: "[1, 2]" },
+    { q: "2. Which keyword is used to create a function?", options: ["func", "define", "def", "function"], a: "def" },
+    { q: "3. How do you start a comment in Python?", options: ["//", "/*", "#", "--"], a: "#" },
+    { q: "4. What is the correct file extension for Python?", options: [".pyt", ".py", ".pt", ".python"], a: ".py" },
+    { q: "5. Which of these is used for a multi-line string?", options: ["'''", "###", "---", "&&&"], a: "'''" },
+    { q: "6. What is the output of 2 ** 3?", options: ["6", "8", "9", "5"], a: "8" },
+    { q: "7. Which operator is used for 'floor division'?", options: ["/", "%", "//", "**"], a: "//" },
+    { q: "8. How do you create a dictionary?", options: ["[]", "{}", "()", "<>"], a: "{}" },
+    { q: "9. Which method removes whitespace from start/end?", options: ["trim()", "strip()", "cut()", "clean()"], a: "strip()" },
+    { q: "10. What is the default return value of a function?", options: ["0", "False", "None", "Null"], a: "None" }
 ];
 
 window.startQuiz = function() {
     const main = document.querySelector('.main-content');
-    let html = `<div class="panel" style="max-width:800px; margin:20px auto; padding:30px;">
-        <h2>Python Basics Assessment</h2>
-        <form id="quizForm">`;
+    let quizHtml = `
+        <div class="panel" style="max-width: 800px; margin: 0 auto; padding: 40px; background: #f0f2f5;">
+            <div style="background: var(--primary); height: 10px; border-radius: 8px 8px 0 0; margin: -40px -40px 30px -40px;"></div>
+            <h1 style="margin-bottom: 10px;">Python Basics Assessment</h1>
+            <p style="color: #666; margin-bottom: 30px;">Complete all 10 questions to earn your credits.</p>
+            <form id="quizForm">
+    `;
 
-    quizData.forEach((item, i) => {
-        html += `<div style="margin-bottom:20px; padding:15px; border-bottom:1px solid #eee;">
-            <p><strong>${i+1}. ${item.q}</strong></p>
-            ${item.options.map(opt => `<label style="display:block; margin:5px 0;">
-                <input type="radio" name="q${i}" value="${opt}" required> ${opt}
-            </label>`).join('')}
-        </div>`;
+    quizData.forEach((item, index) => {
+        quizHtml += `
+            <div class="panel" style="margin-bottom: 20px; border: 1px solid #ddd;">
+                <p style="font-weight: 600; font-size: 16px; margin-bottom: 15px;">${item.q}</p>
+                <div style="display: grid; gap: 10px;">
+                    ${item.options.map(opt => `
+                        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; padding: 8px; border-radius: 4px; transition: 0.2s;">
+                            <input type="radio" name="q${index}" value="${opt}" required style="width: 18px; height: 18px;">
+                            ${opt}
+                        </label>
+                    `).join('')}
+                </div>
+            </div>
+        `;
     });
 
-    html += `<button type="submit" class="btn-primary" style="width:100%; padding:15px;">Submit Quiz</button></form></div>`;
-    main.innerHTML = html;
+    quizHtml += `
+            <button type="submit" class="btn-primary" style="width: 100%; padding: 15px; font-size: 18px; margin-top: 20px;">Submit Quiz</button>
+            <button type="button" onclick="location.reload()" style="width: 100%; background: none; border: none; color: #666; margin-top: 15px; cursor: pointer;">Cancel</button>
+        </form>
+    </div>`;
+
+    main.innerHTML = quizHtml;
 
     document.getElementById('quizForm').onsubmit = async (e) => {
         e.preventDefault();
-        alert("Checking answers... please wait.");
-        
         const formData = new FormData(e.target);
-        let correct = 0;
-        quizData.forEach((item, i) => { if(formData.get(`q${i}`) === item.a) correct++; });
-        
-        const score = (correct / quizData.length) * 100;
-        await submitFinalScore(score);
+        let correctCount = 0;
+        quizData.forEach((item, index) => {
+            if (formData.get(`q${index}`) === item.a) correctCount++;
+        });
+        const finalScore = (correctCount / quizData.length) * 100;
+        await submitFinalScore(finalScore);
     };
 };
 
 async function submitFinalScore(score) {
-    try {
-        const { data: { user } } = await supabaseClient.auth.getUser();
-        
-        // 1. Record Assessment
-        await supabaseClient.from('assessments').insert([{ 
-            user_id: user.id, score, subject: 'Python', status: 'Completed' 
-        }]);
+    const { data: { user } } = await supabaseClient.auth.getUser();
+    
+    // 1. Save to Assessments for the Overall Score calculation
+    await supabaseClient.from('assessments').insert([{ 
+        user_id: user.id, 
+        score: score, 
+        subject: 'Python' 
+    }]);
 
-        // 2. Update Progress & Credits
-        const { data: profile } = await supabaseClient.from('profiles').select('credit_points').eq('id', user.id).single();
-        const newPoints = (profile?.credit_points || 0) + (score === 100 ? 50 : score/2);
+    // 2. Update the specific profile column for the progress bar
+    // Use 'python_progress' to match your renderProgress mapping
+    await supabaseClient.from('profiles')
+        .update({ python_progress: score }) 
+        .eq('id', user.id);
 
-        await supabaseClient.from('profiles').update({ 
-            python_progress: score, 
-            credit_points: newPoints 
-        }).eq('id', user.id);
+    // 3. Update Credit Points
+    await updateStudentMetrics(score / 2); 
 
-        alert(`Quiz Submitted! Final Score: ${score}%`);
-        location.reload();
-    } catch (err) {
-        console.error("Submission Error:", err);
-        alert("Error saving score. Check console.");
-    }
+    alert(`EduSense: Quiz Submitted! Your Python progress is now ${score}%.`);
+    location.reload(); 
 }
 
-// Start app
+async function updateStudentMetrics(pointsToAdd) {
+    const { data: { user } } = await supabaseClient.auth.getUser();
+    const { data: profile } = await supabaseClient.from('profiles').select('credit_points').eq('id', user.id).single();
+    const newPoints = (profile.credit_points || 0) + pointsToAdd;
+    await supabaseClient.from('profiles').update({ credit_points: newPoints }).eq('id', user.id);
+}
+
+window.updateWellbeing = async function(status) {
+    const { data: { user } } = await supabaseClient.auth.getUser();
+    let score = status === 'Great' ? 95 : status === 'Good' ? 80 : status === 'Okay' ? 60 : 40;
+    const { error } = await supabaseClient.from('profiles').update({ wellbeing: score }).eq('id', user.id);
+    if (!error) {
+        document.getElementById('wellbeingReal').innerText = score;
+        alert(`EduSense: Mood logged as ${status}!`);
+    }
+};
+
 init();
