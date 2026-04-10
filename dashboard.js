@@ -23,14 +23,23 @@ async function init() {
     }
 
     // 1. Fetch Profile for general stats
-    const { data: profile, error } = await supabaseClient
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single();
+   // Change .single() to .maybeSingle() to prevent the crash
+const { data: profile, error } = await supabaseClient
+    .from('profiles')
+    .select('*')
+    .eq('id', user.id)
+    .maybeSingle(); 
 
-    if (error || !profile) return;
+if (error) {
+    console.error("Profile error:", error);
+    return;
+}
 
+// If profile is null, the script won't crash now
+if (!profile) {
+    document.getElementById('realNameDisplay').innerText = "Guest User";
+    return; 
+}
     // 2. Fetch Assessments for the REAL Overall Score
     const { data: assessments } = await supabaseClient
         .from('assessments')
