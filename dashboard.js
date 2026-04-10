@@ -22,7 +22,7 @@ async function init() {
         return;
     }
 
-    // 1. Fetch Profile for general stats
+    // 1. Fetch Profile
     const { data: profile, error } = await supabaseClient
         .from('profiles')
         .select('*')
@@ -31,49 +31,48 @@ async function init() {
 
     if (error || !profile) return;
 
-    // 2. Fetch Assessments for the REAL Overall Score
+    // 2. Fetch Assessments with Difficulty Weight for Weighted Math
     const { data: assessments } = await supabaseClient
         .from('assessments')
-        .select('score')
+        .select('score, difficulty_weight')
         .eq('user_id', user.id);
 
     // 3. Update User Header
     const name = profile.full_name || "Student";
-    document.getElementById('realNameDisplay').innerText = name;
-    document.getElementById('greeting').innerText = `Good morning, ${name.split(' ')[0]} 👋`;
-    document.getElementById('userInitials').innerText = name.split(' ').map(n => n[0]).join('').toUpperCase();
+    const displayName = document.getElementById('realNameDisplay');
+    if(displayName) displayName.innerText = name;
     
-    // 4. Update Stats with REAL Logic
-    let average = 0;
+    const greeting = document.getElementById('greeting');
+    if(greeting) greeting.innerText = `Good morning, ${name.split(' ')[0]} 👋`;
+    
+    const initials = document.getElementById('userInitials');
+    if(initials) initials.innerText = name.split(' ').map(n => n[0]).join('').toUpperCase();
+    
+    // 4. Update Stats with Weighted Logic
     if (assessments && assessments.length > 0) {
-        average = assessments.reduce((acc, curr) => acc + curr.score, 0) / assessments.length;
-        document.getElementById('overallScore').innerText = `${Math.round(average)}%`;
+        const totalWeightedScore = assessments.reduce((acc, curr) => {
+            // Default weight to 1 if not specified in DB
+            const weight = curr.difficulty_weight || 1.0;
+            return acc + (curr.score * weight);
+        }, 0);
+        
+        const weightedAverage = totalWeightedScore / assessments.length;
+        document.getElementById('overallScore').innerText = `${Math.round(weightedAverage)}%`;
     } else {
         document.getElementById('overallScore').innerText = `0%`; 
     }
 
+    // 5. Calculate Credits and Learning Level
     const creditPoints = profile.credit_points || 0;
     const calculatedLL = Math.floor(creditPoints / 500) + 1;
     
     document.getElementById('streakReal').innerText = `${profile.streak || 0} days`;
-    document.getElementById('wellbeingReal').innerText = profile.wellbeing || 0;
+    document.getElementById('wellbeingReal').innerText = profile.wellbeing || "--";
     document.getElementById('creditVal').innerText = creditPoints;
     document.getElementById('llVal').innerText = calculatedLL;
 
-    // 5. Render Subject Progress Bars
     renderProgress(profile);
-
-    // 6. Adaptive EduSense Insights
-    const adaptiveMessage = document.getElementById('adaptive-hint');
-    if (adaptiveMessage) {
-        if (average < 50 && assessments.length > 0) {
-            adaptiveMessage.innerText = "⚠️ EduSense Notice: Your score is a bit low. Try the 'Python' modules again!";
-        } else if (creditPoints > 100) {
-            adaptiveMessage.innerText = "🌟 EduSense Insight: Great progress! You're on track to reach Learning Level 2.";
-        } else {
-            adaptiveMessage.innerText = "🚀 Welcome to EduSense! Complete a quiz to start your adaptive journey.";
-        }
-    }
+    setupChatListeners();
 }
 
 function renderProgress(profile) {
@@ -96,6 +95,7 @@ function renderProgress(profile) {
         </div>`).join('');
 }
 
+// --- QUIZ & ASSESSMENT LOGIC ---
 const quizData = [
     { q: "1. Which of these is a Python List?", options: ["[1, 2]", "{1, 2}", "(1, 2)", "<1, 2>"], a: "[1, 2]" },
     { q: "2. Which keyword is used to create a function?", options: ["func", "define", "def", "function"], a: "def" },
@@ -113,22 +113,17 @@ window.startQuiz = function() {
     const main = document.querySelector('.main-content');
     let quizHtml = `
         <div class="panel" style="max-width: 800px; margin: 0 auto; padding: 40px; background: #f0f2f5;">
-            <div style="background: var(--primary); height: 10px; border-radius: 8px 8px 0 0; margin: -40px -40px 30px -40px;"></div>
             <h1 style="margin-bottom: 10px;">Python Basics Assessment</h1>
-            <p style="color: #666; margin-bottom: 30px;">Complete all 10 questions to earn your credits.</p>
             <form id="quizForm">
     `;
 
     quizData.forEach((item, index) => {
         quizHtml += `
             <div class="panel" style="margin-bottom: 20px; border: 1px solid #ddd;">
-                <p style="font-weight: 600; font-size: 16px; margin-bottom: 15px;">${item.q}</p>
+                <p style="font-weight: 600; margin-bottom: 15px;">${item.q}</p>
                 <div style="display: grid; gap: 10px;">
                     ${item.options.map(opt => `
-                        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; padding: 8px; border-radius: 4px; transition: 0.2s;">
-                            <input type="radio" name="q${index}" value="${opt}" required style="width: 18px; height: 18px;">
-                            ${opt}
-                        </label>
+                        <label><input type="radio" name="q${index}" value="${opt}" required> ${opt}</label>
                     `).join('')}
                 </div>
             </div>
@@ -136,8 +131,7 @@ window.startQuiz = function() {
     });
 
     quizHtml += `
-            <button type="submit" class="btn-primary" style="width: 100%; padding: 15px; font-size: 18px; margin-top: 20px;">Submit Quiz</button>
-            <button type="button" onclick="location.reload()" style="width: 100%; background: none; border: none; color: #666; margin-top: 15px; cursor: pointer;">Cancel</button>
+            <button type="submit" class="btn-primary" style="width: 100%; padding: 15px;">Submit Quiz</button>
         </form>
     </div>`;
 
@@ -158,23 +152,23 @@ window.startQuiz = function() {
 async function submitFinalScore(score) {
     const { data: { user } } = await supabaseClient.auth.getUser();
     
-    // 1. Save to Assessments for the Overall Score calculation
+    // Applying Difficulty Weight for Python Basics
+    const weight = 1.2;
+
     await supabaseClient.from('assessments').insert([{ 
         user_id: user.id, 
         score: score, 
-        subject: 'Python' 
+        subject: 'Python',
+        difficulty_weight: weight
     }]);
 
-    // 2. Update the specific profile column for the progress bar
-    // Use 'python_progress' to match your renderProgress mapping
     await supabaseClient.from('profiles')
         .update({ python_progress: score }) 
         .eq('id', user.id);
 
-    // 3. Update Credit Points
     await updateStudentMetrics(score / 2); 
 
-    alert(`EduSense: Quiz Submitted! Your Python progress is now ${score}%.`);
+    alert(`EduSense: Quiz Submitted! Progress: ${score}%`);
     location.reload(); 
 }
 
@@ -185,14 +179,38 @@ async function updateStudentMetrics(pointsToAdd) {
     await supabaseClient.from('profiles').update({ credit_points: newPoints }).eq('id', user.id);
 }
 
+// --- AI TUTOR INTERACTIVE LOGIC ---
+window.sendChat = function() {
+    const input = document.getElementById('chatInput');
+    const chatBox = document.getElementById('ai-chat-box');
+    const userMessage = input.value.trim();
+
+    if (!userMessage || !chatBox) return;
+
+    chatBox.innerHTML += `<div style="text-align: right; margin-bottom: 10px;"><span style="background: var(--primary); color: white; padding: 8px; border-radius: 8px; display: inline-block;">${userMessage}</span></div>`;
+    input.value = '';
+
+    setTimeout(() => {
+        let botResponse = "I'm here to help! Try asking about Python or your Credit Points.";
+        if (userMessage.toLowerCase().includes("python")) botResponse = "Focus on Indentation and Lists for Python Basics!";
+        if (userMessage.toLowerCase().includes("credit")) botResponse = "Earn 500 credits to level up to LL 2!";
+        
+        chatBox.innerHTML += `<div style="text-align: left; margin-bottom: 10px;"><span style="background: #eee; padding: 8px; border-radius: 8px; display: inline-block;">🤖 ${botResponse}</span></div>`;
+        chatBox.scrollTop = chatBox.scrollHeight;
+    }, 600);
+};
+
+function setupChatListeners() {
+    document.getElementById('chatInput')?.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') sendChat();
+    });
+}
+
 window.updateWellbeing = async function(status) {
     const { data: { user } } = await supabaseClient.auth.getUser();
     let score = status === 'Great' ? 95 : status === 'Good' ? 80 : status === 'Okay' ? 60 : 40;
-    const { error } = await supabaseClient.from('profiles').update({ wellbeing: score }).eq('id', user.id);
-    if (!error) {
-        document.getElementById('wellbeingReal').innerText = score;
-        alert(`EduSense: Mood logged as ${status}!`);
-    }
+    await supabaseClient.from('profiles').update({ wellbeing: score }).eq('id', user.id);
+    document.getElementById('wellbeingReal').innerText = score;
 };
 
 init();
